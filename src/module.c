@@ -651,8 +651,8 @@ static void freeRedisModuleAsyncRMCallPromise(RedisModuleAsyncRMCallPromise *pro
     zfree(promise);
 }
 
-void moduleReleaseTempClient(client *c) {
-    serverLog(LL_WARNING, "moduleReleaseTempClient: Releasing client %p", (void*)c);
+void moduleReleaseTempClient(client *c, const char* caller) {
+    serverLog(LL_WARNING, "%s:moduleReleaseTempClient: Releasing client %p", caller, (void*)c);
     if (moduleTempClientCount == moduleTempClientCap) {
         moduleTempClientCap = moduleTempClientCap ? moduleTempClientCap*2 : 32;
         moduleTempClients = zrealloc(moduleTempClients, sizeof(c)*moduleTempClientCap);
@@ -835,9 +835,11 @@ void moduleFreeContext(RedisModuleCtx *ctx) {
      * If the client is assigned manually, e.g ctx->client = someClientInstance,
      * none of these flags will be set and we do not attempt to free it. */
     if (ctx->flags & REDISMODULE_CTX_TEMP_CLIENT)
-        moduleReleaseTempClient(ctx->client);
-    else if (ctx->flags & REDISMODULE_CTX_NEW_CLIENT)
+        moduleReleaseTempClient(ctx->client, "moduleFreeContext");
+    else if (ctx->flags & REDISMODULE_CTX_NEW_CLIENT) {
+        serverLog(LL_WARNING, "moduleFreeContext:freeClient: Releasing client %p", (void*)ctx->client);
         freeClient(ctx->client);
+    }
 }
 
 static CallReply *moduleParseReply(client *c, RedisModuleCtx *ctx) {
@@ -861,7 +863,7 @@ void moduleCallCommandUnblockedHandler(client *c) {
     serverAssert(promise);
     RedisModule *module = promise->module;
     if (!promise->on_unblocked) {
-        moduleReleaseTempClient(c);
+        moduleReleaseTempClient(c, "moduleCallCommandUnblockedHandler");
         return; /* module did not set any unblock callback. */
     }
     moduleCreateContext(&ctx, module, REDISMODULE_CTX_TEMP_CLIENT);
@@ -873,7 +875,7 @@ void moduleCallCommandUnblockedHandler(client *c) {
     module->in_call--;
 
     moduleFreeContext(&ctx);
-    moduleReleaseTempClient(c);
+    moduleReleaseTempClient(c, "moduleCallComandUnblockedHandler");
 }
 
 /* Create a module ctx and keep track of the nesting level.
@@ -6068,7 +6070,7 @@ int RM_CallReplyPromiseAbort(RedisModuleCallReply *reply, void **private_data) {
     promise->private_data = NULL;
     promise->on_unblocked = NULL;
     unblockClient(promise->c, 0);
-    moduleReleaseTempClient(promise->c);
+    moduleReleaseTempClient(promise->c, "RM_CallReplyPromiseAbort");
     return REDISMODULE_OK;
 }
 
@@ -6617,7 +6619,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
 cleanup:
     if (reply) autoMemoryAdd(ctx,REDISMODULE_AM_REPLY,reply);
     if (ctx->module) ctx->module->in_call--;
-    if (c) moduleReleaseTempClient(c);
+    if (c) moduleReleaseTempClient(c, "RM_CALL");
     return reply;
 }
 
@@ -8375,8 +8377,8 @@ void moduleHandleBlockedClients(void) {
          * We need to glue such replies to the client output buffer and
          * free the temporary client we just used for the replies. */
         if (c) AddReplyFromClient(c, bc->reply_client);
-        moduleReleaseTempClient(bc->reply_client);
-        moduleReleaseTempClient(bc->thread_safe_ctx_client);
+        moduleReleaseTempClient(bc->reply_client, "moduleHandleBlockedClients");
+        moduleReleaseTempClient(bc->thread_safe_ctx_client, "moduleHandleBlockedClients");
 
         /* Update stats now that we've finished the blocking operation.
          * This needs to be out of the reply callback above given that a
@@ -12075,6 +12077,7 @@ void modulesCron(void) {
     const unsigned int min_client = 8;
     while (iteration > 0 && moduleTempClientCount > 0 && moduleTempClientMinCount > min_client) {
         client *c = moduleTempClients[--moduleTempClientCount];
+        serverLog(LL_WARNING, "modulesCron:freeClient: Releasing client %p", (void*)c);
         freeClient(c);
         iteration--;
         moduleTempClientMinCount--;
