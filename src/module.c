@@ -836,9 +836,9 @@ void moduleFreeContext(RedisModuleCtx *ctx) {
      * If this context created a new client (e.g detached context), we free it.
      * If the client is assigned manually, e.g ctx->client = someClientInstance,
      * none of these flags will be set and we do not attempt to free it. */
-    if (ctx->flags & REDISMODULE_CTX_TEMP_CLIENT)
+    if (ctx->flags & REDISMODULE_CTX_TEMP_CLIENT && !(ctx->flags & REDISMODULE_CTX_NEW_CLIENT)) {
         moduleReleaseTempClient(ctx->client, "moduleFreeContext");
-    else if (ctx->flags & REDISMODULE_CTX_NEW_CLIENT) {
+    } else if (ctx->flags & REDISMODULE_CTX_NEW_CLIENT) {
         serverLog(LL_WARNING, "moduleFreeContext:freeClient: Releasing client %p", (void*)ctx->client);
         freeClient(ctx->client);
     }
@@ -891,7 +891,8 @@ void moduleCreateContext(RedisModuleCtx *out_ctx, RedisModule *module, int ctx_f
     out_ctx->getapifuncptr = (void*)(unsigned long)&RM_GetApi;
     out_ctx->module = module;
     out_ctx->flags = ctx_flags;
-    if (ctx_flags & REDISMODULE_CTX_TEMP_CLIENT)
+    // Nafraf: is it possible to have two bits set?
+    if (ctx_flags & REDISMODULE_CTX_TEMP_CLIENT && !(ctx_flags & REDISMODULE_CTX_NEW_CLIENT))
         out_ctx->client = moduleAllocTempClient();
     else if (ctx_flags & REDISMODULE_CTX_NEW_CLIENT)
         out_ctx->client = createClient(NULL);
