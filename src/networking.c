@@ -1660,6 +1660,7 @@ static void resetReusableQueryBuf(client *c) {
 }
 
 void freeClient(client *c) {
+    serverLog(LL_WARNING, "freeClient: Freeing client %p", (void*)c);
     listNode *ln;
 
     /* If a client is protected, yet we need to free it right now, make sure

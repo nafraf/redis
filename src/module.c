@@ -661,7 +661,7 @@ void moduleReleaseTempClient(client *c) {
     listEmpty(c->reply);
     listEmpty(c->watched_keys);
     if (c->bstate.keys) {
-        dictRelease(c->bstate.keys);  // allocated in blocked.c
+        dictEmpty(c->bstate.keys, NULL);  // allocated in blocked.c
     }
     c->reply_bytes = 0;
     c->duration = 0;
