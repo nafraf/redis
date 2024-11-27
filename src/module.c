@@ -633,10 +633,12 @@ client *moduleAllocTempClient(void) {
         c = moduleTempClients[--moduleTempClientCount];
         if (moduleTempClientCount < moduleTempClientMinCount)
             moduleTempClientMinCount = moduleTempClientCount;
+        serverLog(LL_WARNING, "moduleAllocTempClient: Reusing client %p", (void*)c);
     } else {
         c = createClient(NULL);
         c->flags |= CLIENT_MODULE;
         c->user = NULL; /* Root user */
+        serverLog(LL_WARNING, "moduleAllocTempClient: Created client %p", (void*)c);
     }
     return c;
 }
@@ -9575,6 +9577,7 @@ void revokeClientAuthentication(client *c) {
  * is called from onUnload() to give the module a chance to cleanup any
  * resources associated with clients it has authenticated. */
 static void moduleFreeAuthenticatedClients(RedisModule *module) {
+    serverLog(LL_WARNING, "moduleFreeAuthenticatedClients module '%s'", module->name);
     listIter li;
     listNode *ln;
     listRewind(server.clients,&li);
@@ -9584,6 +9587,7 @@ static void moduleFreeAuthenticatedClients(RedisModule *module) {
 
         RedisModule *auth_module = (RedisModule *) c->auth_module;
         if (auth_module == module) {
+            serverLog(LL_WARNING, "moduleFreeAuthenticatedClients client: %p", (void*)c);
             revokeClientAuthentication(c);
         }
     }
@@ -12194,6 +12198,7 @@ void moduleFreeArgs(struct redisCommandArg *args, int num_args) {
  * and after that needs to free the command->fullname and the command itself.
  */
 int moduleFreeCommand(struct RedisModule *module, struct redisCommand *cmd) {
+    serverLog(LL_WARNING, "moduleFreeCommand: %s", cmd->fullname);
     if (cmd->proc != RedisModuleCommandDispatcher)
         return C_ERR;
 
