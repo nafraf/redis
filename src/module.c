@@ -658,6 +658,7 @@ void moduleReleaseTempClient(client *c) {
     }
     clearClientConnectionState(c);
     listEmpty(c->reply);
+    listEmpty(c->watched_keys);
     c->reply_bytes = 0;
     c->duration = 0;
     resetClient(c);
