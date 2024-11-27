@@ -652,13 +652,15 @@ static void freeRedisModuleAsyncRMCallPromise(RedisModuleAsyncRMCallPromise *pro
 }
 
 void moduleReleaseTempClient(client *c) {
+    serverLog(LL_WARNING, "Releasing client %p", (void*)c);
     if (moduleTempClientCount == moduleTempClientCap) {
         moduleTempClientCap = moduleTempClientCap ? moduleTempClientCap*2 : 32;
         moduleTempClients = zrealloc(moduleTempClients, sizeof(c)*moduleTempClientCap);
     }
     clearClientConnectionState(c);
     listEmpty(c->reply);
-    listEmpty(c->watched_keys);
+    listEmpty(c->watched_keys);   //
+    dictRelease(c->bstate.keys);  // allocated in blocked.c
     c->reply_bytes = 0;
     c->duration = 0;
     resetClient(c);
